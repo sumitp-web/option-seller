@@ -1,0 +1,9 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+__pycache__/
+.pytest_cache/
+.venv/
+.env
+.kite_session.json
