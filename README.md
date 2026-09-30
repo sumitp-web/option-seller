@@ -1,56 +1,54 @@
-# Option Seller
+# One-click Option Seller
 
-A web app for option sellers on NSE and BSE F&O, using Zerodha Kite Connect.
+A single web page for selling NIFTY and SENSEX options through Zerodha, with the app watching your stop losses for you. It runs on your own computer.
 
-**Phase 1 (this version):** live positions and risk. It pulls your open F&O positions from Kite, computes IV and Greeks for every leg, groups them by underlying (NIFTY, BANKNIFTY, SENSEX, BANKEX, stocks…), shows P&L if spot moves ±1–3%, and raises alerts when:
+![Page](docs/page.png)
 
-- total or per-underlying loss crosses a limit
-- an underlying's net delta drifts past a limit
-- a short strike is breached, or spot comes within a buffer of it
-- a short option's premium reaches 2× the price it was sold at
-- a short leg expires today
+## What it does
 
-The app is read-only: it never places orders.
+- **Start:** sells the selected call and put strikes together with your qty, at market.
+- **Sell Call / Sell Put:** one click sells the chosen strike at market (qty in lots, Margin or Intraday product).
+- **Buy Call / Buy Put:** buys back all your open short calls or puts.
+- **Close All Positions (F6)** and **Cancel All Orders (F7)**.
+- **Leg SL (points):** each leg exits when its premium rises that many points above the sell price. The app then sells the same type **4 strikes further away** with the same quantity and a fresh SL. This repeats every time a leg hits its SL.
+- **Max loss (₹):** when total P&L (booked + open) reaches −max loss, everything is closed.
+- **Trailing stop on profit:** once profit reaches *TSL starts at*, the app locks *Then lock*; for every further *Trail every* of profit the lock rises by the same amount. If profit falls back to the lock, everything is closed.
+- **Square off at:** everything is closed at this time (default 3:15 PM).
+- **One click** checkbox: untick it to get a confirmation before each order.
 
-![Dashboard](docs/dashboard.png)
+All orders are real MARKET orders. There is no paper mode.
 
-## Run it
+**The app must stay running while you have positions.** If you close it or your computer sleeps, nothing watches your SL. The trade state is saved to `trade_state.json`, so when you start the app again it carries on monitoring.
 
-Backend (Python 3.11+):
+## Setup (once)
+
+1. Install Python 3.11+.
+2. In the [Kite developer console](https://developers.kite.trade), set your app's **Redirect URL** to `http://localhost:8000/auth/callback`.
+3. In this folder:
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate        # Windows: .venv\Scripts\activate
+   pip install -r requirements.txt
+   cp .env.example .env             # then put your KITE_API_KEY and KITE_API_SECRET in .env
+   ```
+
+## Every trading day
 
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
+source .venv/bin/activate
+uvicorn app.main:app --port 8000
+```
+
+Open http://localhost:8000 and click **Log in with Kite** (Kite tokens expire every morning).
+
+If you open `app/static/index.html` directly without the app running, it shows a preview with sample prices and never places orders.
+
+## Tests
+
+```bash
 pip install -r requirements-dev.txt
-cp .env.example .env          # add your Kite API key and secret, or set DEMO_MODE=true
-uvicorn app.main:app --reload --port 8000
+pytest
 ```
 
-Frontend (Node 22):
-
-```bash
-cd frontend
-npm install
-npm run dev                   # http://localhost:3000
-```
-
-With real keys, click **Log in with Kite**. Kite access tokens expire every morning, so you log in once per trading day.
-
-Tests: `cd backend && pytest`.
-
-## Layout
-
-```
-backend/app/
-  broker.py      Kite login and data (plus DemoBroker sample positions)
-  greeks.py      Black-Scholes price, Greeks, implied volatility
-  portfolio.py   positions -> legs with Greeks, grouped by underlying, scenarios
-  risk.py        risk rules -> alerts
-  main.py        REST + WebSocket API (/api/portfolio, /ws/portfolio)
-frontend/app/    Next.js dashboard
-```
-
-## Roadmap
-
-- Phase 2: option chain and selling screener (delta, premium, IV rank, liquidity filters), payoff charts, margin estimates.
-- Phase 3: trade journal, analytics, optional order placement with confirmation.
+The tests run the SL shift, max loss, TSL, square-off and order-retry rules against a simulated broker.
