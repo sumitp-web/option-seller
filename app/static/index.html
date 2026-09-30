@@ -96,6 +96,8 @@ button { cursor: pointer; }
 .center .idx { font-size: 16px; }
 .center .idx b { font-weight: 700; }
 .outline-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.start { border: 0; border-radius: 3px; background: var(--sell); color: #fff; font-weight: 700; font-size: 16px; letter-spacing: .03em; padding: 10px 44px; }
+.start:hover { background: var(--sell-hover); }
 .obtn { background: var(--bg); border: 1px solid var(--outline); color: var(--outline); border-radius: 3px; padding: 8px 14px; }
 .obtn:hover { background: var(--tab-bg); }
 .message { font-size: 13px; font-weight: 600; }
@@ -175,6 +177,7 @@ td.l, th.l { text-align: left; }
   <div class="center">
     <div class="name" id="idx-name">NIFTY 50</div>
     <div class="idx">LTP: <b class="num" id="idx-ltp">–</b> <span class="num" id="idx-chg"></span></div>
+    <button type="button" class="start" id="start">Start</button>
     <div class="outline-btns">
       <button type="button" class="obtn" id="close-all">Close All Positions / F6</button>
       <button type="button" class="obtn" id="cancel-all">Cancel All Orders / F7</button>
@@ -329,7 +332,7 @@ td.l, th.l { text-align: left; }
     } else {
       rows = (t?.log || []).slice().reverse().map((e) => `<tr><td class="num">${e.time}</td><td class="l ${e.level === "error" ? "log-err" : ""}">${e.message}</td></tr>`).join("");
     }
-    const empty = { positions: "No positions yet. Pick strikes above and press Sell Call or Sell Put.", orders: "No orders today.", trades: "No trades today.", log: "Orders and rule triggers will appear here." }[tab];
+    const empty = { positions: "No positions yet. Pick the call and put strikes above and press Start.", orders: "No orders today.", trades: "No trades today.", log: "Orders and rule triggers will appear here." }[tab];
     $("tbody").innerHTML = rows || `<tr class="empty"><td colspan="${HEADS[tab].length}">${empty}</td></tr>`;
   }
 
@@ -360,6 +363,7 @@ td.l, th.l { text-align: left; }
 
   // ---------- actions ----------
   const ACTIONS = {
+    "start": { label: () => `Sell ${$("lots").value} lot(s) ${symbol("CE")} and ${symbol("PE")} at market`, run: () => source.startTrade(Number($("ce-strike").value), Number($("pe-strike").value)) },
     "sell-ce": { label: () => `Sell ${$("lots").value} lot(s) ${symbol("CE")} at market`, run: () => source.sell("CE", Number($("ce-strike").value)) },
     "sell-pe": { label: () => `Sell ${$("lots").value} lot(s) ${symbol("PE")} at market`, run: () => source.sell("PE", Number($("pe-strike").value)) },
     "buy-ce": { label: () => "Buy back all open short calls at market", run: () => source.buy("CE") },
@@ -373,7 +377,7 @@ td.l, th.l { text-align: left; }
     catch (err) { setMessage(err.message, true); }
   }
   function request(id) {
-    if (id.startsWith("sell")) {
+    if (id.startsWith("sell") || id === "start") {
       const r = risk();
       if (!(r.lots >= 1)) return setMessage("Enter Qty (Lots) of at least 1.", true);
       if (!(r.leg_sl_points > 0)) return setMessage("Enter a leg SL in points.", true);
@@ -425,6 +429,7 @@ td.l, th.l { text-align: left; }
     watch() { return this.json("/api/watch", { method: "POST", body: JSON.stringify({ underlying: view.underlying, expiry: view.expiry }) }); },
     async after(trade) { view.trade = trade; renderTrade(); this.refreshBooks(); },
     async sell(type, strike) { await this.after(await this.json("/api/sell", { method: "POST", body: JSON.stringify({ ...risk(), type, strike }) })); return "Order executed"; },
+    async startTrade(ce_strike, pe_strike) { await this.after(await this.json("/api/start", { method: "POST", body: JSON.stringify({ ...risk(), ce_strike, pe_strike }) })); return "Call and put sold"; },
     async buy(type) { await this.after(await this.json("/api/buy", { method: "POST", body: JSON.stringify({ type }) })); return "Bought back"; },
     async closeAll() { await this.after(await this.json("/api/close-all", { method: "POST" })); return "All positions closed"; },
     async cancelAll() { const r = await this.json("/api/cancel-all", { method: "POST" }); this.refreshBooks(); return `${r.cancelled} pending order(s) cancelled`; },
@@ -547,6 +552,11 @@ td.l, th.l { text-align: left; }
         if (trade && trade.status === "running" && trade.params.underlying !== view.underlying) throw new Error(`A ${trade.params.underlying} trade is running. Close it before switching.`);
         ensureTrade(); sellLeg(type, strike, risk().lots * cfg[view.underlying].lot, 0); renderTrade();
         return "Order executed (preview, no real order)";
+      },
+      async startTrade(ce, pe) {
+        await this.sell("CE", ce);
+        await this.sell("PE", pe);
+        return "Call and put sold (preview, no real order)";
       },
       async buy(type) {
         const legs = trade?.legs.filter((l) => l.status === "open" && l.type === type) || [];

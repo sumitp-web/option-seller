@@ -173,3 +173,16 @@ def test_leg_closed_in_kite_is_not_bought_again(env):
     assert len(buys) == 1
     assert e.trade.legs[0].exit_reason == "Closed outside app"
     assert e.trade.status == "closed"
+
+
+def test_start_sells_both_selected_strikes(env):
+    b, e, _ = env
+    e.start(params(lots=3), 26000, 25000)
+    assert b.placed == [("SELL", "NIFTY26OCT26000CE", 225), ("SELL", "NIFTY26OCT25000PE", 225)]
+
+
+def test_start_places_nothing_if_a_strike_is_not_listed(env):
+    b, e, _ = env
+    with pytest.raises(ValueError, match="25010 PE is not listed"):
+        e.start(params(), 26000, 25010)
+    assert b.placed == []

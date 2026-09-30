@@ -6,6 +6,7 @@ A single web page for selling NIFTY and SENSEX options through Zerodha, with the
 
 ## What it does
 
+- **Start:** sells the selected call and put strikes together with your qty, at market.
 - **Sell Call / Sell Put:** one click sells the chosen strike at market (qty in lots, Margin or Intraday product).
 - **Buy Call / Buy Put:** buys back all your open short calls or puts.
 - **Close All Positions (F6)** and **Cancel All Orders (F7)**.

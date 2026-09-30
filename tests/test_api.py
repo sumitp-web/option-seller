@@ -27,3 +27,12 @@ def test_order_book(tmp_path, monkeypatch):
     client = TestClient(create_app(FakeBroker()))
     assert client.get("/api/orders").json() == []
     assert client.get("/api/trades").json() == []
+
+
+def test_start_button(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "state_file", str(tmp_path / "s.json"))
+    client = TestClient(create_app(FakeBroker()))
+    r = client.post("/api/start", json={"underlying": "NIFTY", "expiry": "2026-10-06", "lots": 1, "leg_sl_points": 30,
+                                        "max_loss": 5000, "square_off": "23:59", "ce_strike": 26000, "pe_strike": 25000})
+    assert r.status_code == 200, r.text
+    assert [l["type"] for l in r.json()["legs"]] == ["CE", "PE"]

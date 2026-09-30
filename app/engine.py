@@ -129,6 +129,17 @@ class Engine:
             self._save()
             return self.trade
 
+    def start(self, p: TradeParams, ce_strike: float, pe_strike: float) -> Trade:
+        """Start button: sell the selected call and put together."""
+        with self.lock:
+            # Check both strikes before placing anything, so a typo can't leave a single leg sold.
+            contracts = self.chain_contracts(p.underlying, p.expiry) if p.underlying in UNDERLYINGS else {}
+            for strike, typ in ((ce_strike, "CE"), (pe_strike, "PE")):
+                if (float(strike), typ) not in contracts:
+                    raise ValueError(f"{p.underlying} {strike:g} {typ} is not listed for {p.expiry}.")
+            self.sell(p, "CE", ce_strike)
+            return self.sell(p, "PE", pe_strike)
+
     def buy(self, typ: str) -> None:
         """Buy Call / Buy Put: buy back every open short leg of that type."""
         with self.lock:

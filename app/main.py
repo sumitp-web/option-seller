@@ -38,6 +38,11 @@ class SellIn(Risk):
     strike: float
 
 
+class StartIn(Risk):
+    ce_strike: float
+    pe_strike: float
+
+
 class BuyIn(BaseModel):
     type: str
 
@@ -165,6 +170,12 @@ def create_app(broker=None) -> FastAPI:
     def sell(body: SellIn) -> dict:
         risk = TradeParams(**body.model_dump(exclude={"type", "strike"}))
         guarded(engine.sell, risk, body.type, body.strike)
+        return engine.snapshot()
+
+    @app.post("/api/start")
+    def start(body: StartIn) -> dict:
+        risk = TradeParams(**body.model_dump(exclude={"ce_strike", "pe_strike"}))
+        guarded(engine.start, risk, body.ce_strike, body.pe_strike)
         return engine.snapshot()
 
     @app.post("/api/buy")
