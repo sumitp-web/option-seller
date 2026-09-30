@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>One-click Option Seller</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: broker one-click ticket. Field row on top, call | index | put trade row, tabs with positions and order/trade books underneath. */
+:root {
+  --bg: #ffffff;
+  --panel: #f7f7f7;
+  --line: #d9d9d9;
+  --fg: #2b2b2b;
+  --muted: #6f6f6f;
+  --sell: #f4511e;
+  --sell-hover: #e0420f;
+  --buy: #43a047;
+  --buy-hover: #35873a;
+  --outline: #d9534f;
+  --tab: #e8a898;
+  --tab-bg: #fdf1ed;
+  --profit: #3d9a41;
+  --loss: #e53935;
+  --row-alt: #f4f4f4;
+  --focus: #1e6fd9;
+  --warn: #c77c00;
+  --font-ui: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-num: "Roboto Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17181b; --panel: #1f2125; --line: #33363c; --fg: #e6e6e6; --muted: #9a9ca3;
+    --sell: #ff6a3d; --sell-hover: #ff7f57; --buy: #4caf50; --buy-hover: #5cc160; --outline: #ff6b66;
+    --tab: #7a3d30; --tab-bg: #2a1d1a; --profit: #5cc160; --loss: #ff6b66; --row-alt: #1c1e22; --focus: #5b9bff; --warn: #e3a948;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #17181b; --panel: #1f2125; --line: #33363c; --fg: #e6e6e6; --muted: #9a9ca3;
+  --sell: #ff6a3d; --sell-hover: #ff7f57; --buy: #4caf50; --buy-hover: #5cc160; --outline: #ff6b66;
+  --tab: #7a3d30; --tab-bg: #2a1d1a; --profit: #5cc160; --loss: #ff6b66; --row-alt: #1c1e22; --focus: #5b9bff; --warn: #e3a948;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.4 var(--font-ui); padding-inline: 16px; padding-block: 10px 24px; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.pos { color: var(--profit); }
+.neg { color: var(--loss); }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 10px; font-size: 16px; }
+.top .spacer { flex: 1; }
+.pill { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 99px; border: 1px solid currentColor; }
+.pill.live { color: var(--profit); }
+.pill.off { color: var(--loss); }
+.pill.preview { color: var(--warn); }
+.login { background: var(--sell); color: #fff; border-radius: 4px; padding: 5px 12px; text-decoration: none; font-weight: 600; font-size: 14px; }
+
+/* Field row */
+.fields { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr .55fr .6fr; gap: 10px 22px; align-items: end; }
+.f { display: grid; gap: 4px; min-width: 0; }
+.f label { font-size: 12px; color: var(--muted); }
+.f select, .f input { width: 100%; height: 36px; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); padding: 0 10px; }
+.f input:disabled { background: var(--panel); color: var(--muted); }
+.oneclick { display: flex; justify-content: flex-end; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
+.oneclick input { accent-color: var(--outline); width: 16px; height: 16px; }
+.risk { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px 22px; margin-top: 6px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; }
+.risk .f input { height: 32px; }
+@media (max-width: 1000px) { .fields { grid-template-columns: repeat(3, minmax(0, 1fr)); } .risk { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .fields, .risk { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Trade row */
+.trade-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: start; margin-top: 16px; }
+.side .strike { font-size: 16px; color: var(--muted); overflow-wrap: anywhere; }
+.side .strike b { color: var(--fg); font-weight: 600; }
+.side .ltp { font-size: 16px; margin: 2px 0 8px; }
+.side .ltp b { font-weight: 700; }
+.side.put { text-align: right; }
+.btns { display: flex; gap: 12px; flex-wrap: wrap; }
+.side.put .btns { justify-content: flex-end; }
+.act { border: 0; border-radius: 3px; color: #fff; padding: 9px 18px; min-width: 88px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+.act.sell { background: var(--sell); }
+.act.sell:hover { background: var(--sell-hover); }
+.act.buy { background: var(--buy); }
+.act.buy:hover { background: var(--buy-hover); }
+.act svg { width: 14px; height: 14px; }
+.center { text-align: center; display: grid; gap: 6px; justify-items: center; }
+.center .name { font-size: 16px; color: var(--muted); letter-spacing: .02em; }
+.center .idx { font-size: 16px; }
+.center .idx b { font-weight: 700; }
+.outline-btns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.obtn { background: var(--bg); border: 1px solid var(--outline); color: var(--outline); border-radius: 3px; padding: 8px 14px; }
+.obtn:hover { background: var(--tab-bg); }
+.message { font-size: 13px; font-weight: 600; }
+.message .err { color: var(--loss); }
+@media (max-width: 760px) {
+  .trade-row { grid-template-columns: 1fr 1fr; }
+  .center { grid-column: 1 / -1; order: -1; }
+}
+
+.confirm { margin-top: 10px; border: 1px solid var(--outline); background: var(--tab-bg); border-radius: 3px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.confirm .spacer { flex: 1; }
+
+.summary { display: flex; flex-wrap: wrap; gap: 6px 26px; margin-top: 14px; font-size: 14px; }
+.summary b { font-size: 16px; }
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; margin-top: 14px; border-bottom: 1px solid var(--tab); overflow-x: auto; }
+.tab { background: transparent; border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0; padding: 8px 18px; margin-bottom: -1px; white-space: nowrap; }
+.tab[aria-selected="true"] { background: var(--tab-bg); border-color: var(--tab); border-bottom: 1px solid var(--tab-bg); }
+.table-wrap { overflow: auto; max-height: 420px; border: 1px solid var(--line); border-top: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { position: sticky; top: 0; background: var(--panel); font-weight: 400; color: var(--fg); padding: 8px 10px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); text-align: center; white-space: nowrap; }
+td { padding: 7px 10px; text-align: center; white-space: nowrap; border-bottom: 1px solid var(--line); }
+tbody tr:nth-child(even) td { background: var(--row-alt); }
+td.l, th.l { text-align: left; }
+.side-sell { color: var(--sell); }
+.side-buy { color: var(--buy); }
+.st-ok { color: var(--profit); }
+.st-bad { color: var(--loss); }
+.small-btn { background: var(--bg); border: 1px solid var(--outline); color: var(--outline); border-radius: 3px; padding: 2px 10px; font-size: 13px; }
+.tag { font-size: 11px; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; margin-left: 6px; color: var(--muted); }
+.empty td { color: var(--muted); padding: 18px; }
+.log-err { color: var(--loss); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <span>Broker: <b>Zerodha</b> (User: <b id="user">–</b>)</span>
+  <span class="pill preview" id="conn">Preview · sample prices</span>
+  <span class="spacer"></span>
+  <a class="login" id="login" href="/auth/login" hidden>Log in with Kite</a>
+</div>
+
+<div class="fields">
+  <div class="f"><label for="underlying">Select Options</label>
+    <select id="underlying"><option>NIFTY</option><option>SENSEX</option></select></div>
+  <div class="f"><label for="today">Select Date</label><input id="today" disabled></div>
+  <div class="f"><label for="expiry">Expiry Date</label><select id="expiry"></select></div>
+  <div class="f"><label for="ce-strike">Call Strike Price</label><select id="ce-strike"></select></div>
+  <div class="f"><label for="pe-strike">Put Strike Price</label><select id="pe-strike"></select></div>
+  <div class="f"><label for="lots">Qty (Lots)</label><input type="number" id="lots" min="1" step="1" value="1"></div>
+  <div class="f"><label for="product">Product</label>
+    <select id="product"><option value="NRML">Margin</option><option value="MIS">Intraday</option></select></div>
+</div>
+<label class="oneclick"><input type="checkbox" id="oneclick" checked> One click: <b id="oneclick-label">Enabled</b></label>
+
+<div class="risk" aria-label="Risk settings">
+  <div class="f"><label for="leg-sl">Leg SL (points)</label><input type="number" id="leg-sl" min="1" step="0.5" value="30"></div>
+  <div class="f"><label for="max-loss">Max loss (₹)</label><input type="number" id="max-loss" min="1" step="500" value="5000"></div>
+  <div class="f"><label for="tsl-start">TSL starts at profit (₹)</label><input type="number" id="tsl-start" min="0" step="100" value="3000"></div>
+  <div class="f"><label for="tsl-lock">Then lock (₹)</label><input type="number" id="tsl-lock" min="0" step="100" value="1500"></div>
+  <div class="f"><label for="tsl-step">Trail every (₹)</label><input type="number" id="tsl-step" min="0" step="100" value="500"></div>
+  <div class="f"><label for="square-off">Square off at</label><input type="time" id="square-off" value="15:15"></div>
+</div>
+
+<div class="trade-row">
+  <div class="side call">
+    <div class="strike">Strike: <b class="num" id="ce-sym">–</b></div>
+    <div class="ltp">LTP: <b class="num" id="ce-ltp">–</b></div>
+    <div class="btns">
+      <button type="button" class="act sell" id="sell-ce"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M14 8H3m4-4L3 8l4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Sell Call</button>
+      <button type="button" class="act buy" id="buy-ce"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 14V3m-4 4 4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Buy Call</button>
+    </div>
+  </div>
+  <div class="center">
+    <div class="name" id="idx-name">NIFTY 50</div>
+    <div class="idx">LTP: <b class="num" id="idx-ltp">–</b> <span class="num" id="idx-chg"></span></div>
+    <div class="outline-btns">
+      <button type="button" class="obtn" id="close-all">Close All Positions / F6</button>
+      <button type="button" class="obtn" id="cancel-all">Cancel All Orders / F7</button>
+    </div>
+    <div class="message">Message: <span id="message">-</span></div>
+  </div>
+  <div class="side put">
+    <div class="strike">Strike: <b class="num" id="pe-sym">–</b></div>
+    <div class="ltp"><b class="num" id="pe-ltp">–</b> :LTP</div>
+    <div class="btns">
+      <button type="button" class="act buy" id="buy-pe"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v11m-4-4 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Buy Put</button>
+      <button type="button" class="act sell" id="sell-pe"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Sell Put</button>
+    </div>
+  </div>
+</div>
+
+<div class="confirm" id="confirm" hidden>
+  <span id="confirm-text"></span><span class="spacer"></span>
+  <button type="button" class="obtn" id="confirm-no">Cancel</button>
+  <button type="button" class="act sell" id="confirm-yes">Place order</button>
+</div>
+
+<div class="summary">
+  <span>Total P&amp;L: <b class="num" id="s-pnl">₹0</b></span>
+  <span>Booked: <b class="num" id="s-booked">₹0</b></span>
+  <span>Max loss: <b class="num" id="s-maxloss">–</b></span>
+  <span>TSL floor: <b class="num" id="s-floor">Not active</b></span>
+  <span>Square-off: <b class="num" id="s-sq">15:15</b></span>
+</div>
+
+<div class="tabs" role="tablist">
+  <button type="button" class="tab" role="tab" id="tab-positions" aria-selected="true" data-tab="positions">Positions</button>
+  <button type="button" class="tab" role="tab" id="tab-orders" aria-selected="false" data-tab="orders">Order book</button>
+  <button type="button" class="tab" role="tab" id="tab-trades" aria-selected="false" data-tab="trades">Trade book</button>
+  <button type="button" class="tab" role="tab" id="tab-log" aria-selected="false" data-tab="log">Activity</button>
+</div>
+<div class="table-wrap">
+  <table>
+    <thead id="thead"></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const inr = (n) => (n < 0 ? "-₹" : "₹") + Math.abs(Math.round(n)).toLocaleString("en-IN");
+  const fx = (n, d = 2) => n == null ? "–" : Number(n).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const tone = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "");
+  const IDX_NAME = { NIFTY: "NIFTY 50", SENSEX: "SENSEX" };
+
+  const view = { underlying: "NIFTY", expiry: null, lotSize: 75, chain: null, trade: null, orders: [], trades: [], tab: "positions", pending: null };
+  let source;
+
+  $("today").value = new Date().toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+
+  // ---------- rendering ----------
+  function symbol(type) {
+    const strike = Number($(type === "CE" ? "ce-strike" : "pe-strike").value);
+    if (!strike || !view.expiry) return "–";
+    const d = new Date(view.expiry + "T00:00:00");
+    return `${view.underlying}${String(d.getFullYear()).slice(2)}${d.toLocaleString("en", { month: "short" }).toUpperCase()}${strike}${type}`;
+  }
+
+  function fillStrikes() {
+    const c = view.chain;
+    if (!c) return;
+    const strikes = c.rows.map((r) => r.strike);
+    const atm = strikes.reduce((a, s) => (Math.abs(s - c.spot) < Math.abs(a - c.spot) ? s : a), strikes[0]);
+    const step = strikes.length > 1 ? strikes[1] - strikes[0] : 50;
+    for (const [id, def] of [["ce-strike", atm + 4 * step], ["pe-strike", atm - 4 * step]]) {
+      const sel = $(id);
+      if (sel.options.length) continue; // keep the user's pick; strikes refill on underlying/expiry change
+      sel.innerHTML = strikes.map((s) => `<option value="${s}">${s}</option>`).join("");
+      sel.value = strikes.includes(def) ? def : atm;
+    }
+  }
+
+  function renderQuotes() {
+    const c = view.chain;
+    if (!c) return;
+    fillStrikes();
+    $("idx-name").textContent = IDX_NAME[view.underlying];
+    $("idx-ltp").textContent = fx(c.spot);
+    const pct = c.spot_change_pct || 0, pts = c.spot * (pct / (100 + pct));
+    $("idx-chg").textContent = `(${pts >= 0 ? "+" : ""}${fx(pts)}/${pct >= 0 ? "+" : ""}${fx(pct)}%)`;
+    $("idx-chg").className = "num " + tone(pct);
+    for (const t of ["CE", "PE"]) {
+      const strike = Number($(t === "CE" ? "ce-strike" : "pe-strike").value);
+      const row = c.rows.find((r) => r.strike === strike);
+      $(t === "CE" ? "ce-sym" : "pe-sym").textContent = symbol(t);
+      $(t === "CE" ? "ce-ltp" : "pe-ltp").textContent = fx(row?.[t.toLowerCase()]?.ltp);
+    }
+  }
+
+  function renderTrade() {
+    const t = view.trade, active = t && t.status !== "closed";
+    $("s-pnl").textContent = inr(t?.pnl || 0); $("s-pnl").className = "num " + tone(t?.pnl || 0);
+    $("s-booked").textContent = inr(t?.booked_pnl || 0); $("s-booked").className = "num " + tone(t?.booked_pnl || 0);
+    $("s-maxloss").textContent = "-" + inr(active ? t.params.max_loss : Number($("max-loss").value) || 0);
+    $("s-floor").textContent = active && t.tsl_floor != null ? inr(t.tsl_floor) : "Not active";
+    $("s-sq").textContent = active ? t.params.square_off : $("square-off").value;
+    renderTable();
+  }
+
+  const HEADS = {
+    positions: ["Symbol Name", "Qty", "Sell Price", "LTP", "SL at", "P&L", "Shifts", ""],
+    orders: ["Symbol Name", "Type", "Side", "Qty", "Rem Qty", "Price", "Status", "Time/Date", "Order Id", "Message"],
+    trades: ["Symbol Name", "Side", "Qty", "Price", "Time/Date", "Trade Id", "Order Id"],
+    log: ["Time", "Activity"],
+  };
+  function fmtTime(ts) {
+    if (!ts) return "–";
+    const d = new Date(String(ts).replace(" ", "T"));
+    return isNaN(d) ? ts : `${d.toLocaleTimeString("en-GB")} / ${d.toLocaleDateString("en-GB").replace(/\//g, "-")}`;
+  }
+  function renderTable() {
+    const tab = view.tab, t = view.trade;
+    $("thead").innerHTML = `<tr>${HEADS[tab].map((h, i) => `<th class="${i === 0 || (tab === "log" && i === 1) ? "l" : ""}">${h}</th>`).join("")}</tr>`;
+    let rows = "";
+    if (tab === "positions") {
+      rows = (t?.legs || []).slice().sort((a, b) => (a.status === b.status ? 0 : a.status === "open" ? -1 : 1)).map((l) => `
+        <tr>
+          <td class="l num">${l.symbol}${l.status === "closed" ? `<span class="tag">${l.exit_reason || "closed"}</span>` : ""}</td>
+          <td class="num">${l.status === "closed" ? 0 : -l.quantity}</td>
+          <td class="num">${fx(l.sell_price)}</td>
+          <td class="num">${fx(l.status === "closed" ? l.buy_price : l.ltp)}</td>
+          <td class="num">${l.status === "closed" ? "–" : fx(l.sl_price)}</td>
+          <td class="num ${tone(l.pnl)}">${fx(l.pnl)}</td>
+          <td class="num">${l.shift_no || 0}</td>
+          <td>${l.status === "open" && t.status === "running" ? `<button type="button" class="small-btn" data-exit="${l.id}">Exit</button>` : ""}</td>
+        </tr>`).join("");
+    } else if (tab === "orders") {
+      rows = view.orders.slice().reverse().map((o) => `
+        <tr>
+          <td class="l num">${o.tradingsymbol}</td><td>${o.order_type}</td>
+          <td class="${o.transaction_type === "SELL" ? "side-sell" : "side-buy"}">${o.transaction_type}</td>
+          <td class="num">${o.quantity}</td><td class="num">${o.pending_quantity ?? 0}</td>
+          <td class="num">${fx(o.average_price || o.price)}</td>
+          <td class="${o.status === "COMPLETE" ? "st-ok" : o.status === "REJECTED" ? "st-bad" : ""}">${o.status === "COMPLETE" ? "Executed" : o.status[0] + o.status.slice(1).toLowerCase()}</td>
+          <td class="num">${fmtTime(o.order_timestamp)}</td><td class="num">${o.order_id}</td>
+          <td>${o.status_message || "-"}</td>
+        </tr>`).join("");
+    } else if (tab === "trades") {
+      rows = view.trades.slice().reverse().map((x) => `
+        <tr>
+          <td class="l num">${x.tradingsymbol}</td>
+          <td class="${x.transaction_type === "SELL" ? "side-sell" : "side-buy"}">${x.transaction_type}</td>
+          <td class="num">${x.quantity}</td><td class="num">${fx(x.average_price)}</td>
+          <td class="num">${fmtTime(x.fill_timestamp || x.exchange_timestamp)}</td><td class="num">${x.trade_id}</td><td class="num">${x.order_id}</td>
+        </tr>`).join("");
+    } else {
+      rows = (t?.log || []).slice().reverse().map((e) => `<tr><td class="num">${e.time}</td><td class="l ${e.level === "error" ? "log-err" : ""}">${e.message}</td></tr>`).join("");
+    }
+    const empty = { positions: "No positions yet. Pick strikes above and press Sell Call or Sell Put.", orders: "No orders today.", trades: "No trades today.", log: "Orders and rule triggers will appear here." }[tab];
+    $("tbody").innerHTML = rows || `<tr class="empty"><td colspan="${HEADS[tab].length}">${empty}</td></tr>`;
+  }
+
+  function setMessage(text, isError) { $("message").innerHTML = isError ? `<span class="err">${text}</span>` : text; }
+
+  function setConn(state) {
+    const el = $("conn");
+    el.className = "pill " + ({ live: "live", login: "off", offline: "off", preview: "preview" })[state];
+    el.textContent = ({ live: "Live", login: "Not logged in", offline: "App not running: SL is not being watched", preview: "Preview · sample prices" })[state];
+    $("login").hidden = state !== "login";
+  }
+
+  function setExpiries(list, lotSize) {
+    view.lotSize = lotSize;
+    $("expiry").innerHTML = list.map((e) => `<option value="${e}">${new Date(e + "T00:00:00").toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/ /g, "-")}</option>`).join("");
+    view.expiry = list[0];
+  }
+  function resetStrikes() { $("ce-strike").innerHTML = ""; $("pe-strike").innerHTML = ""; }
+
+  function risk() {
+    return {
+      underlying: view.underlying, expiry: view.expiry, lots: parseInt($("lots").value), product: $("product").value,
+      leg_sl_points: parseFloat($("leg-sl").value), max_loss: parseFloat($("max-loss").value),
+      tsl_start: parseFloat($("tsl-start").value) || 0, tsl_lock: parseFloat($("tsl-lock").value) || 0,
+      tsl_step: parseFloat($("tsl-step").value) || 0, square_off: $("square-off").value,
+    };
+  }
+
+  // ---------- actions ----------
+  const ACTIONS = {
+    "sell-ce": { label: () => `Sell ${$("lots").value} lot(s) ${symbol("CE")} at market`, run: () => source.sell("CE", Number($("ce-strike").value)) },
+    "sell-pe": { label: () => `Sell ${$("lots").value} lot(s) ${symbol("PE")} at market`, run: () => source.sell("PE", Number($("pe-strike").value)) },
+    "buy-ce": { label: () => "Buy back all open short calls at market", run: () => source.buy("CE") },
+    "buy-pe": { label: () => "Buy back all open short puts at market", run: () => source.buy("PE") },
+    "close-all": { label: () => "Close all positions at market", run: () => source.closeAll() },
+    "cancel-all": { label: () => "Cancel all pending orders", run: () => source.cancelAll() },
+  };
+  async function perform(id) {
+    const a = ACTIONS[id];
+    try { setMessage(a.label() + "…"); setMessage((await a.run()) || "Done"); }
+    catch (err) { setMessage(err.message, true); }
+  }
+  function request(id) {
+    if (id.startsWith("sell")) {
+      const r = risk();
+      if (!(r.lots >= 1)) return setMessage("Enter Qty (Lots) of at least 1.", true);
+      if (!(r.leg_sl_points > 0)) return setMessage("Enter a leg SL in points.", true);
+      if (!(r.max_loss > 0)) return setMessage("Enter the max loss.", true);
+      if (r.tsl_start && r.tsl_lock >= r.tsl_start) return setMessage("The locked profit must be less than the TSL start profit.", true);
+    }
+    if ($("oneclick").checked || id === "cancel-all") return perform(id);
+    view.pending = id;
+    $("confirm-text").textContent = ACTIONS[id].label() + "?";
+    $("confirm").hidden = false;
+  }
+  Object.keys(ACTIONS).forEach((id) => $(id).addEventListener("click", () => request(id)));
+  $("confirm-yes").addEventListener("click", () => { $("confirm").hidden = true; perform(view.pending); });
+  $("confirm-no").addEventListener("click", () => { $("confirm").hidden = true; });
+  $("oneclick").addEventListener("change", (e) => { $("oneclick-label").textContent = e.target.checked ? "Enabled" : "Disabled"; });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "F6") { e.preventDefault(); request("close-all"); }
+    if (e.key === "F7") { e.preventDefault(); request("cancel-all"); }
+  });
+  $("tbody").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-exit]");
+    if (!b) return;
+    try { await source.exitLeg(b.dataset.exit); setMessage("Leg exited"); } catch (err) { setMessage(err.message, true); }
+  });
+  document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
+    view.tab = b.dataset.tab;
+    document.querySelectorAll(".tab").forEach((x) => x.setAttribute("aria-selected", String(x === b)));
+    if (view.tab === "orders" || view.tab === "trades") source.refreshBooks?.();
+    renderTable();
+  }));
+  $("underlying").addEventListener("change", (e) => { view.underlying = e.target.value; resetStrikes(); source.selectUnderlying(view.underlying); });
+  $("expiry").addEventListener("change", (e) => { view.expiry = e.target.value; resetStrikes(); source.watch(); });
+  ["ce-strike", "pe-strike"].forEach((id) => $(id).addEventListener("change", renderQuotes));
+  ["max-loss", "square-off"].forEach((id) => $(id).addEventListener("input", renderTrade));
+
+  // ---------- live backend ----------
+  const live = {
+    async json(path, opts) {
+      const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.detail || `Request failed (${r.status})`);
+      return body;
+    },
+    async selectUnderlying(u) {
+      const m = await this.json(`/api/expiries?underlying=${u}`);
+      setExpiries(m.expiries, m.lot_size);
+      await this.watch();
+    },
+    watch() { return this.json("/api/watch", { method: "POST", body: JSON.stringify({ underlying: view.underlying, expiry: view.expiry }) }); },
+    async after(trade) { view.trade = trade; renderTrade(); this.refreshBooks(); },
+    async sell(type, strike) { await this.after(await this.json("/api/sell", { method: "POST", body: JSON.stringify({ ...risk(), type, strike }) })); return "Order executed"; },
+    async buy(type) { await this.after(await this.json("/api/buy", { method: "POST", body: JSON.stringify({ type }) })); return "Bought back"; },
+    async closeAll() { await this.after(await this.json("/api/close-all", { method: "POST" })); return "All positions closed"; },
+    async cancelAll() { const r = await this.json("/api/cancel-all", { method: "POST" }); this.refreshBooks(); return `${r.cancelled} pending order(s) cancelled`; },
+    async exitLeg(id) { await this.after(await this.json(`/api/exit-leg/${id}`, { method: "POST" })); },
+    async refreshBooks() {
+      try { [view.orders, view.trades] = await Promise.all([this.json("/api/orders"), this.json("/api/trades")]); renderTable(); } catch (e) { /* shown on the next action */ }
+    },
+    connect() {
+      const ws = new WebSocket(location.origin.replace(/^http/, "ws") + "/ws");
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.logged_in === false) { setConn("login"); return; }
+        setConn("live");
+        if (msg.error) setMessage(msg.error, true);
+        if (msg.trade !== undefined) { view.trade = msg.trade; renderTrade(); }
+        if (msg.chain && msg.chain.underlying === view.underlying && msg.chain.expiry === view.expiry) { view.chain = msg.chain; renderQuotes(); }
+      };
+      ws.onclose = () => { setConn("offline"); setTimeout(() => this.connect(), 2000); };
+    },
+    async start() {
+      const s = await this.json("/api/status");
+      if (!s.logged_in) { setConn("login"); return; }
+      $("user").textContent = s.user || "–";
+      await this.selectUnderlying(view.underlying);
+      this.connect();
+      this.refreshBooks();
+      setInterval(() => (view.tab === "orders" || view.tab === "trades") && this.refreshBooks(), 5000);
+    },
+  };
+
+  // ---------- preview: simulated prices and fills, no real orders ----------
+  const preview = (() => {
+    const cfg = { NIFTY: { spot: 25482.35, step: 50, lot: 75, prev: 25390 }, SENSEX: { spot: 83610.4, step: 100, lot: 20, prev: 83300 } };
+    const expiries = (u) => {
+      const out = [], d = new Date(), target = u === "NIFTY" ? 2 : 4;
+      d.setDate(d.getDate() + ((target - d.getDay() + 7) % 7));
+      for (let i = 0; i < 4; i++) { out.push(d.toISOString().slice(0, 10)); d.setDate(d.getDate() + 7); }
+      return out;
+    };
+    const ncdf = (x) => 0.5 * (1 + Math.tanh(0.7978845608 * (x + 0.044715 * x ** 3)));
+    const price = (spot, k, t, iv, call) => {
+      const s = iv * Math.sqrt(t), d1 = (Math.log(spot / k) + 0.5 * s * s) / s, d2 = d1 - s;
+      return Math.max(0.05, call ? spot * ncdf(d1) - k * ncdf(d2) : k * ncdf(-d2) - spot * ncdf(-d1));
+    };
+    let spot = cfg.NIFTY.spot, trade = null, seq = 0;
+    const stamp = () => { const d = new Date(); return `${d.toISOString().slice(0, 10)} ${d.toTimeString().slice(0, 8)}`; };
+    const clock = () => new Date().toLocaleTimeString("en-GB");
+    function chain() {
+      const c = cfg[view.underlying];
+      const days = Math.max(0.3, (new Date(view.expiry + "T15:30:00") - new Date()) / 864e5);
+      const t = days / 365, atm = Math.round(spot / c.step) * c.step, rows = [];
+      for (let i = -20; i <= 20; i++) {
+        const k = atm + i * c.step, m = (k - spot) / spot, iv = 0.12 + 1.8 * m * m + (m < 0 ? -0.2 * m : 0);
+        rows.push({ strike: k, ce: { ltp: +price(spot, k, t, iv, true).toFixed(2) }, pe: { ltp: +price(spot, k, t, iv, false).toFixed(2) } });
+      }
+      return { underlying: view.underlying, expiry: view.expiry, spot, spot_change_pct: ((spot - c.prev) / c.prev) * 100, rows };
+    }
+    const ltpOf = (strike, type) => { const r = view.chain.rows.find((x) => x.strike === strike); return r ? r[type.toLowerCase()].ltp : 0.05; };
+    const symOf = (strike, type) => { const d = new Date(view.expiry + "T00:00:00"); return `${view.underlying}${String(d.getFullYear()).slice(2)}${d.toLocaleString("en", { month: "short" }).toUpperCase()}${strike}${type}`; };
+    const log = (message, level = "info") => trade.log.push({ time: clock(), message, level });
+    const total = () => trade.legs.reduce((a, l) => a + l.pnl, 0);
+    function fill(side, symbolName, qty, px) {
+      const id = String(2610000000000 + ++seq);
+      view.orders.push({ tradingsymbol: symbolName, order_type: "MARKET", transaction_type: side, quantity: qty, pending_quantity: 0, average_price: px, status: "COMPLETE", order_timestamp: stamp(), order_id: id, status_message: "" });
+      view.trades.push({ tradingsymbol: symbolName, transaction_type: side, quantity: qty, average_price: px, fill_timestamp: stamp(), trade_id: String(50000000 + seq), order_id: id });
+      return px;
+    }
+    function sellLeg(type, strike, qty, shift) {
+      const px = fill("SELL", symOf(strike, type), qty, ltpOf(strike, type));
+      const leg = { id: String(++seq), type, strike, symbol: symOf(strike, type), quantity: qty, sell_price: px, ltp: px, sl_price: +(px + trade.params.leg_sl_points).toFixed(2), pnl: 0, status: "open", shift_no: shift };
+      trade.legs.push(leg);
+      log(`Sold ${qty} ${strike} ${type} at ${fx(px)}, SL ${fx(leg.sl_price)}`);
+      return leg;
+    }
+    function buyBack(l, reason) {
+      l.buy_price = fill("BUY", l.symbol, l.quantity, l.ltp); l.status = "closed"; l.exit_reason = reason;
+      l.pnl = (l.sell_price - l.buy_price) * l.quantity;
+      log(`Bought back ${l.quantity} ${l.strike} ${l.type} at ${fx(l.buy_price)} (${reason})`);
+    }
+    function closeIfFlat(reason) { if (trade.status === "running" && !trade.legs.some((l) => l.status === "open")) { trade.status = "closed"; log(`All legs closed (${reason}). Final P&L ${inr(total())}`); } }
+    function exitAll(reason) {
+      if (!trade || trade.status !== "running") return;
+      trade.legs.filter((l) => l.status === "open").forEach((l) => buyBack(l, reason));
+      trade.status = "closed"; log(`Exited all legs (${reason}). Final P&L ${inr(total())}`);
+    }
+    function tick() {
+      const c = cfg[view.underlying];
+      spot += (Math.random() - 0.5) * c.spot * 0.0006;
+      view.chain = chain();
+      if (trade && trade.status === "running") {
+        for (const l of trade.legs.filter((x) => x.status === "open")) {
+          l.ltp = ltpOf(l.strike, l.type); l.pnl = (l.sell_price - l.ltp) * l.quantity;
+          if (l.ltp >= l.sl_price) {
+            log(`${l.strike} ${l.type} SL hit`); buyBack(l, "SL");
+            const strikes = view.chain.rows.map((r) => r.strike), ns = strikes[strikes.indexOf(l.strike) + (l.type === "CE" ? 4 : -4)];
+            if (ns) sellLeg(l.type, ns, l.quantity, (l.shift_no || 0) + 1);
+          }
+        }
+        const p = trade.params, pnl = total();
+        trade.booked_pnl = trade.legs.filter((l) => l.status === "closed").reduce((a, l) => a + l.pnl, 0);
+        trade.pnl = pnl;
+        if (p.tsl_start > 0 && pnl >= p.tsl_start) {
+          const f = p.tsl_lock + (p.tsl_step > 0 ? Math.floor((pnl - p.tsl_start) / p.tsl_step) * p.tsl_step : 0);
+          if (trade.tsl_floor == null || f > trade.tsl_floor) { trade.tsl_floor = f; log(`TSL: profit locked at ${inr(f)}`); }
+        }
+        if (pnl <= -p.max_loss) exitAll("Max loss");
+        else if (trade.tsl_floor != null && pnl <= trade.tsl_floor) exitAll("TSL");
+      }
+      view.trade = trade;
+      renderQuotes(); renderTrade();
+    }
+    function ensureTrade() {
+      if (!trade || trade.status === "closed") trade = { status: "running", legs: [], tsl_floor: null, pnl: 0, booked_pnl: 0, params: risk(), log: [] };
+      else trade.params = risk();
+    }
+    return {
+      selectUnderlying(u) { spot = cfg[u].spot; setExpiries(expiries(u), cfg[u].lot); view.chain = chain(); renderQuotes(); },
+      watch() { view.chain = chain(); renderQuotes(); },
+      async sell(type, strike) {
+        if (trade && trade.status === "running" && trade.params.underlying !== view.underlying) throw new Error(`A ${trade.params.underlying} trade is running. Close it before switching.`);
+        ensureTrade(); sellLeg(type, strike, risk().lots * cfg[view.underlying].lot, 0); renderTrade();
+        return "Order executed (preview, no real order)";
+      },
+      async buy(type) {
+        const legs = trade?.legs.filter((l) => l.status === "open" && l.type === type) || [];
+        if (!legs.length) throw new Error(`There is no open short ${type === "CE" ? "call" : "put"} to buy back.`);
+        legs.forEach((l) => buyBack(l, "Manual")); closeIfFlat("Manual"); renderTrade();
+        return "Bought back (preview)";
+      },
+      async closeAll() { exitAll("Close all"); renderTrade(); return "All positions closed (preview)"; },
+      async cancelAll() { return "0 pending order(s) cancelled"; },
+      async exitLeg(id) { const l = trade?.legs.find((x) => x.id === id); if (l && l.status === "open") { buyBack(l, "Manual"); closeIfFlat("Manual"); renderTrade(); } },
+      start() {
+        setConn("preview");
+        $("user").textContent = "Preview";
+        this.selectUnderlying("NIFTY");
+        // Example trade: a strangle where the put already hit its SL and shifted 4 strikes away.
+        const atm = Math.round(spot / 50) * 50;
+        $("lots").value = 2;
+        ensureTrade();
+        sellLeg("CE", atm + 200, 150, 0);
+        const put = sellLeg("PE", atm - 200, 150, 0);
+        put.ltp = put.sl_price; log(`${put.strike} PE SL hit`); buyBack(put, "SL");
+        sellLeg("PE", atm - 400, 150, 1);
+        $("lots").value = 1;
+        tick();
+        setInterval(tick, 1000);
+      },
+    };
+  })();
+
+  source = preview;
+  const isApp = location.protocol.startsWith("http") && !/claude|artifact/.test(location.hostname);
+  (async () => {
+    if (isApp) {
+      let reachable = false;
+      try { reachable = (await fetch("/api/status")).ok; } catch (e) { /* no backend */ }
+      if (reachable) { source = live; await live.start(); return; }
+    }
+    preview.start();
+  })();
+})();
+</script>
+</body>
+</html>
